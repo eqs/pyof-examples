@@ -3,7 +3,7 @@
 <html lang="" >
     <head>
         <meta charset="UTF-8">
-        <title>02 Particles · HonKit</title>
+        <title>03 GP with Periodic Kernel · HonKit</title>
         <meta http-equiv="X-UA-Compatible" content="IE=edge" />
         <meta name="description" content="">
         <meta name="generator" content="HonKit 3.6.19">
@@ -56,10 +56,8 @@
     <link rel="shortcut icon" href="../../gitbook/images/favicon.ico" type="image/x-icon">
 
     
-    <link rel="next" href="../03_heart/" />
     
-    
-    <link rel="prev" href="../01_simple_example/" />
+    <link rel="prev" href="../03_heart/" />
     
 
     </head>
@@ -123,9 +121,9 @@
             
         </li>
     
-        <li class="chapter active" data-level="2.2" data-path="./">
+        <li class="chapter " data-level="2.2" data-path="../02_particles/">
             
-                <a href="./">
+                <a href="../02_particles/">
             
                     
                     02 Particles
@@ -149,9 +147,9 @@
             
         </li>
     
-        <li class="chapter " data-level="2.4" data-path="../04_gp_with_periodic_kernel/">
+        <li class="chapter active" data-level="2.4" data-path="./">
             
-                <a href="../04_gp_with_periodic_kernel/">
+                <a href="./">
             
                     
                     03 GP with Periodic Kernel
@@ -192,7 +190,7 @@
     <!-- Title -->
     <h1>
         <i class="fa fa-circle-o-notch fa-spin"></i>
-        <a href="../.." >02 Particles</a>
+        <a href="../.." >03 GP with Periodic Kernel</a>
     </h1>
 </div>
 
@@ -207,55 +205,71 @@
     
                                 <section class="normal markdown-section">
                                 
-                                <h1 id="02-particles">02 Particles</h1>
-<p><img src="particles.gif" width="500"></p>
+                                <h1 id="04-gaussian-process-with-periodic-kernel">04 Gaussian Process with Periodic Kernel</h1>
+<p><img src="circle_periodic_kernel.gif" width="500"></p>
 <pre><code class="lang-python"><span class="hljs-comment"># -*- coding: utf-8 -*-</span>
 <span class="hljs-keyword">import</span> sys
 <span class="hljs-keyword">import</span> numpy <span class="hljs-keyword">as</span> np
-<span class="hljs-keyword">from</span> scipy.spatial <span class="hljs-keyword">import</span> distance_matrix
+<span class="hljs-keyword">from</span> matplotlib <span class="hljs-keyword">import</span> pyplot <span class="hljs-keyword">as</span> plt
+<span class="hljs-keyword">import</span> GPy
+
 <span class="hljs-keyword">import</span> pyof <span class="hljs-keyword">as</span> of
 
 
 <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">ofApp</span>(<span class="hljs-params">of.ofPyBaseApp</span>):</span>
     <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">setup</span>(<span class="hljs-params">self</span>):</span>
-        of.ofSetWindowTitle(<span class="hljs-string">&apos;Particles&apos;</span>)
+        of.ofSetWindowTitle(<span class="hljs-string">&apos;Gaussian Process&apos;</span>)
+        of.ofSetFrameRate(<span class="hljs-number">2</span>)
+        of.ofEnableSmoothing()
 
-        self.N = <span class="hljs-number">500</span>
-        self.dist_thresh = <span class="hljs-number">64</span>
+        <span class="hljs-comment"># ---- colormap ----</span>
+        cmap = plt.get_cmap(<span class="hljs-string">&apos;prism&apos;</span>)
+        self.colors = [<span class="hljs-built_in">tuple</span>(<span class="hljs-built_in">map</span>(<span class="hljs-keyword">lambda</span> x: <span class="hljs-built_in">int</span>(x*<span class="hljs-number">255</span>), cmap(n)[:<span class="hljs-number">3</span>]))
+                       <span class="hljs-keyword">for</span> n <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(cmap.N)]
 
-        x_list = np.random.randint(<span class="hljs-number">0</span>, of.ofGetWidth(), self.N)
-        y_list = np.random.randint(<span class="hljs-number">0</span>, of.ofGetHeight(), self.N)
-        self.p_list = np.vstack([x_list, y_list]).T
-        self.d_matrix = distance_matrix(self.p_list, self.p_list)
+        <span class="hljs-comment"># ---- Compute Gaussian Process ----</span>
+        w = of.ofGetWidth()
 
-        vx_list = np.random.randn(self.N) * <span class="hljs-number">0.25</span>
-        vy_list = np.random.randn(self.N) * <span class="hljs-number">0.25</span>
-        self.v_list = np.vstack([vx_list, vy_list]).T
+        self.N_sim = <span class="hljs-number">200</span>
+        self.N_sample = <span class="hljs-number">1</span>
 
+        self.x_sim = np.linspace(<span class="hljs-number">0</span>, <span class="hljs-number">2</span>*np.pi, self.N_sim)
+        self.y_sim = np.zeros((self.N_sample, self.N_sim))
+
+        kernel = GPy.kern.src.periodic.PeriodicMatern32(
+            input_dim=<span class="hljs-number">1</span>, variance=<span class="hljs-number">1</span>, lengthscale=<span class="hljs-number">0.05</span>
+        )
+
+        <span class="hljs-comment"># Mean function</span>
+        self.mu = np.zeros(self.N_sim)
+        <span class="hljs-comment"># Cov function</span>
+        self.cov = kernel.K(self.x_sim[:, np.newaxis],
+                            self.x_sim[:, np.newaxis])
 
     <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">update</span>(<span class="hljs-params">self</span>):</span>
-        self.p_list = self.p_list + self.v_list
-        self.d_matrix = distance_matrix(self.p_list, self.p_list)
+        self.y_sim = np.random.multivariate_normal(self.mu, self.cov,
+                                                   size=self.N_sample)
 
     <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">draw</span>(<span class="hljs-params">self</span>):</span>
+        w = of.ofGetWidth()
+        h = of.ofGetHeight()
+        of.ofTranslate(w / <span class="hljs-number">2.0</span>, h / <span class="hljs-number">2.0</span>, <span class="hljs-number">0.0</span>)
+
         of.ofBackground(<span class="hljs-number">0</span>, <span class="hljs-number">255</span>);
+        of.ofNoFill()
+        of.ofSetLineWidth(<span class="hljs-number">2.0</span>)
 
-        <span class="hljs-comment"># Draw lines</span>
-        of.ofSetColor(<span class="hljs-number">255</span>, <span class="hljs-number">255</span>, <span class="hljs-number">255</span>, <span class="hljs-number">128</span>)
-        of.ofSetLineWidth(<span class="hljs-number">4.0</span>)
+        <span class="hljs-keyword">for</span> n <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(self.N_sample):
 
-        ii, jj = np.where(self.d_matrix &lt; self.dist_thresh)
-        <span class="hljs-keyword">for</span> i, j <span class="hljs-keyword">in</span> <span class="hljs-built_in">zip</span>(ii, jj):
-            <span class="hljs-keyword">if</span> i != j:
-                of.ofDrawLine(self.p_list[i, <span class="hljs-number">0</span>], self.p_list[i, <span class="hljs-number">1</span>],
-                              self.p_list[j, <span class="hljs-number">0</span>], self.p_list[j, <span class="hljs-number">1</span>])
+            cl = self.colors[n % <span class="hljs-built_in">len</span>(self.colors)]
+            of.ofSetColor(cl[<span class="hljs-number">0</span>], cl[<span class="hljs-number">1</span>], cl[<span class="hljs-number">2</span>], <span class="hljs-number">128</span>)
 
-        <span class="hljs-comment"># Draw Circles</span>
-        of.ofSetColor(<span class="hljs-number">230</span>, <span class="hljs-number">0</span>, <span class="hljs-number">0</span>, <span class="hljs-number">255</span>)
-        of.ofSetLineWidth(<span class="hljs-number">1.0</span>)
-        <span class="hljs-keyword">for</span> x, y <span class="hljs-keyword">in</span> self.p_list:
-            of.ofDrawCircle(x, y, <span class="hljs-number">8</span>)
-
+            of.ofBeginShape()
+            uu = (<span class="hljs-number">2.0</span> + self.y_sim[n]) * <span class="hljs-number">100</span> * np.cos(self.x_sim)
+            vv = (<span class="hljs-number">2.0</span> + self.y_sim[n]) * <span class="hljs-number">100</span> * np.sin(self.x_sim)
+            <span class="hljs-keyword">for</span> u, v <span class="hljs-keyword">in</span> <span class="hljs-built_in">zip</span>(uu, vv):
+                of.ofVertex(u, v)
+            of.ofEndShape(<span class="hljs-literal">False</span>)
 
 <span class="hljs-keyword">if</span> __name__ == <span class="hljs-string">&apos;__main__&apos;</span>:
     app = ofApp()
@@ -288,14 +302,10 @@
 
             
                 
-                <a href="../01_simple_example/" class="navigation navigation-prev " aria-label="Previous page: 01 Simple Example">
+                <a href="../03_heart/" class="navigation navigation-prev navigation-unique" aria-label="Previous page: 03 Heart">
                     <i class="fa fa-angle-left"></i>
                 </a>
                 
-                
-                <a href="../03_heart/" class="navigation navigation-next " aria-label="Next page: 03 Heart">
-                    <i class="fa fa-angle-right"></i>
-                </a>
                 
             
         
@@ -304,7 +314,7 @@
     <script>
         var gitbook = gitbook || [];
         gitbook.push(function() {
-            gitbook.page.hasChanged({"page":{"title":"02 Particles","level":"2.2","depth":1,"next":{"title":"03 Heart","level":"2.3","depth":1,"path":"examples/03_heart/README.md","ref":"examples/03_heart/README.md","articles":[]},"previous":{"title":"01 Simple Example","level":"2.1","depth":1,"path":"examples/01_simple_example/README.md","ref":"examples/01_simple_example/README.md","articles":[]},"dir":"ltr"},"config":{"gitbook":"*","theme":"default","variables":{},"plugins":[],"pluginsConfig":{"highlight":{},"search":{},"lunr":{"maxIndexSize":1000000,"ignoreSpecialCharacters":false},"fontsettings":{"theme":"white","family":"sans","size":2},"theme-default":{"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"showLevel":false}},"structure":{"langs":"LANGS.md","readme":"README.md","glossary":"GLOSSARY.md","summary":"SUMMARY.md"},"pdf":{"pageNumbers":true,"fontSize":12,"fontFamily":"Arial","paperSize":"a4","chapterMark":"pagebreak","pageBreaksBefore":"/","margin":{"right":62,"left":62,"top":56,"bottom":56},"embedFonts":false},"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"}},"file":{"path":"examples/02_particles/README.md","mtime":"2021-04-12T04:04:14.289Z","type":"markdown"},"gitbook":{"version":"3.6.19","time":"2021-04-12T04:04:21.564Z"},"basePath":"../..","book":{"language":""}});
+            gitbook.page.hasChanged({"page":{"title":"03 GP with Periodic Kernel","level":"2.4","depth":1,"previous":{"title":"03 Heart","level":"2.3","depth":1,"path":"examples/03_heart/README.md","ref":"examples/03_heart/README.md","articles":[]},"dir":"ltr"},"config":{"gitbook":"*","theme":"default","variables":{},"plugins":[],"pluginsConfig":{"highlight":{},"search":{},"lunr":{"maxIndexSize":1000000,"ignoreSpecialCharacters":false},"fontsettings":{"theme":"white","family":"sans","size":2},"theme-default":{"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"showLevel":false}},"structure":{"langs":"LANGS.md","readme":"README.md","glossary":"GLOSSARY.md","summary":"SUMMARY.md"},"pdf":{"pageNumbers":true,"fontSize":12,"fontFamily":"Arial","paperSize":"a4","chapterMark":"pagebreak","pageBreaksBefore":"/","margin":{"right":62,"left":62,"top":56,"bottom":56},"embedFonts":false},"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"}},"file":{"path":"examples/04_gp_with_periodic_kernel/README.md","mtime":"2021-04-12T04:04:14.325Z","type":"markdown"},"gitbook":{"version":"3.6.19","time":"2021-04-12T04:04:21.564Z"},"basePath":"../..","book":{"language":""}});
         });
     </script>
 </div>
